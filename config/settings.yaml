@@ -1,0 +1,30 @@
+# config/settings.yaml
+camera:
+  source: "0"  # Set to "0" for local webcam or "path/to/video.mp4" for testing
+  width: 640
+  height: 480
+  fps: 30
+  frame_skip: 1  # 0 processes every frame; 1 skips every second frame to save CPU
+
+mediapipe:
+  min_detection_confidence: 0.5
+  min_tracking_confidence: 0.5
+  max_num_faces: 1
+  enable_pose: true
+  enable_face_mesh: true
+
+insightface:
+  model_name: "buffalo_l"
+  model_dir: "./models"
+  ctx_id: -1  # -1 is CPU, 0 or greater is CUDA GPU ID
+  det_thresh: 0.6
+  det_size: [640, 640]
+
+server:
+  host: "0.0.0.0"
+  port: 8080
+  reload: false
+  debug: false
+  title: "Real Time CV Platform"
+
+log_level: "INFO"

@@ -36,7 +36,7 @@ async def frame_processing_loop(camera_device: CameraManager, cv_pipeline: Compu
     """
     delay = 1.0 / max(1, fps)
     logger.info("Starting CV frame processing loop task at target delay of %.3fs (Max FPS: %d)", delay, fps)
-    
+
     while True:
         try:
             # 1. Trigger the sequential processing pipeline
@@ -59,10 +59,10 @@ async def handle_pipeline_event(payload: dict) -> None:
     try:
         frame_bytes = payload["frame_bytes"]
         telemetry = payload["telemetry"]
-        
+
         # Base64 encode for simple inline drawing in HTML/canvas elements
         frame_b64 = base64.b64encode(frame_bytes).decode("utf-8")
-        
+
         # Broadcast to all connected clients asynchronously
         await ws_manager.broadcast_json({
             "frame": frame_b64,
@@ -76,7 +76,7 @@ async def handle_pipeline_event(payload: dict) -> None:
 async def startup() -> None:
     """Triggered by NiceGUI on web server startup."""
     global camera, pipeline, pipeline_task
-    
+
     # 1. Load Configurations & Setup logging
     config = load_config_from_file("config/settings.yaml")
     configure_logging(config.log_level)
@@ -88,7 +88,7 @@ async def startup() -> None:
         target_size=(config.camera.width, config.camera.height)
     )
     cv_processor = OpenCVProcessor()
-    
+
     mediapipe_service = MediaPipeService(
         min_detection_confidence=config.mediapipe.min_detection_confidence,
         min_tracking_confidence=config.mediapipe.min_tracking_confidence,
@@ -96,7 +96,7 @@ async def startup() -> None:
         enable_face_mesh=config.mediapipe.enable_face_mesh,
         enable_pose=config.mediapipe.enable_pose
     )
-    
+
     insightface_service = InsightFaceService(
         model_name=config.insightface.model_name,
         model_dir=config.insightface.model_dir,
@@ -141,7 +141,7 @@ async def shutdown() -> None:
     """Triggered by NiceGUI on web server termination."""
     global pipeline_task, camera
     logger.info("Stopping real-time services and releasing resources...")
-    
+
     # Stop background processing
     if pipeline_task:
         pipeline_task.cancel()
@@ -186,7 +186,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 @ui.page("/")
 def index_dashboard() -> None:
     config = load_config_from_file("config/settings.yaml")
-    
+
     # We pass helper control triggers to UI dashboard
     def start_camera():
         try:
@@ -200,11 +200,11 @@ def index_dashboard() -> None:
             camera.close()
 
     # Decorate ui elements in custom page builder
-    build_dashboard(config, config.web.port)
+    build_dashboard(config, config.server.port)
 
     # Register user controls
     app.storage.user.update(cmd="")
-    
+
     # Background timer to poll UI control updates
     async def storage_poll():
         cmd = app.storage.user.get("cmd")
@@ -218,15 +218,13 @@ def index_dashboard() -> None:
     ui.timer(0.2, storage_poll)
 
 
-if __name__ in {"__main__", "builtins"}:
-    # Load configuration parameters to pass down to standard NiceGUI executor
+if __name__ in {"__main__", "__mp_main__"}:
     app_config = load_config_from_file("config/settings.yaml")
-    
-    # Run NiceGUI server (accessible on local LAN or localhost)
+
     ui.run(
-        host=app_config.web.host,
-        port=app_config.web.port,
-        title=app_config.web.title,
-        show=False,       # Prevents auto-launching browser in headless or server environments
+        host=app_config.server.host,
+        port=app_config.server.port,
+        title="Real Time CV Platform",
+        show=False,
         storage_secret="cv_skeleton_secret_token_1928"
     )
