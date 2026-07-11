@@ -65,7 +65,6 @@ class ComputerVisionPipeline:
             name
         )
 
-
     def run_step(self) -> Optional[Dict[str, Any]]:
 
         try:
@@ -75,267 +74,102 @@ class ComputerVisionPipeline:
             if not success or raw_frame is None:
                 return None
 
-
             processed_frame = self._preprocess(raw_frame)
-
-
-            rgb_frame = self._cv_processor.bgr_to_rgb(
-                processed_frame
-            )
-
+            rgb_frame = self._cv_processor.bgr_to_rgb(processed_frame)
 
             self.frame_counter += 1
 
-
             if self.frame_counter % self.ai_interval == 0:
-
-
-                self.last_faces = (
-                    self._insightface.detect_faces(
-                        rgb_frame
-                    )
-                )
-
-
-                self.last_face_meshes = (
-                    self._mediapipe.detect_landmarks(
-                        rgb_frame
-                    )
-                )
-
-
-                self.last_pose = (
-                    self._mediapipe.detect_pose(
-                        rgb_frame
-                    )
-                )
-
+                self.last_faces = self._insightface.detect_faces(rgb_frame)
+                self.last_face_meshes = self._mediapipe.detect_landmarks(rgb_frame)
+                self.last_pose = self._mediapipe.detect_pose(rgb_frame)
 
             faces = self.last_faces
             face_meshes = self.last_face_meshes
             pose_skeleton = self.last_pose
 
-
             verification_results = []
-
-
             best_match_score = 0.0
             best_match_status = False
 
-
-
             for face in faces:
-
-
                 bbox = face.get("bbox")
-
                 embedding = face.get("embedding")
-
 
                 if bbox is None or embedding is None:
                     continue
 
-
-
-                #
-                # REGISTER
-                #
-
-                if self.enroll_requested:
-
-
-                    logger.info(
-                        "Sending REGISTER API request"
-                    )
-
-
+                # ==================== REGISTER ====================
+                if self.enroll_requested and self.enroll_name:
+                    logger.info(f"Sending REGISTER for {self.enroll_name}")
                     try:
-
-                        success, response = (
-                            self._verification.register(
-                                self.enroll_name,
-                                embedding
-                            )
+                        success, response = self._verification.register(
+                            self.enroll_name,
+                            embedding
                         )
-
-
-                        logger.info(
-                            "REGISTER response=%s",
-                            response
-                        )
-
-
-                        self.enroll_requested = False
-
-
-                    except Exception as e:
-
-                        logger.error(
-                            "REGISTER failed %s",
-                            e
-                        )
-
-
-
-                #
-                # IDENTIFY TIMER
-                #
-
-                now = time.time()
-
-
-                if (
-                    now - self.last_identify_time
-                    >= self.identify_interval
-                ):
-
-
-                    self.last_identify_time = now
-
-
-                    logger.info(
-                        "Sending IDENTIFY API request"
-                    )
-
-
-                    try:
-
-
-                        success, identity = (
-                            self._verification.identify(
-                                embedding
-                            )
-                        )
-
-
                         if success:
-
-                            self.last_identity = identity
-
-
-                            logger.info(
-                                "IDENTIFIED %s",
-                                identity
-                            )
-
-
+                            logger.info(f"✅ Registered: {self.enroll_name}")
+                            # שלח event ל-UI
+                            self._event_hub.publish("enroll_success", {"name": self.enroll_name})
+                        else:
+                            self._event_hub.publish("enroll_failed", {"name": self.enroll_name})
                     except Exception as e:
+                        logger.error(f"Register failed: {e}")
+                        self._event_hub.publish("enroll_failed", {"name": self.enroll_name})
 
-                        logger.error(
-                            "IDENTIFY failed %s",
-                            e
-                        )
+                    self.enroll_requested = False
+                    self.enroll_name = None
+                # ==================== IDENTIFY (כל 30 שניות) ====================
+                now = time.time()
+                if now - self.last_identify_time >= self.identify_interval:
+                    self.last_identify_time = now
+                    logger.info("Sending IDENTIFY to API")
+                    try:
+                        success, identity = self._verification.identify(embedding)
+                        if success and identity:
+                            self.last_identity = identity
+                            self._event_hub.publish("identify_result", identity)
+                    except Exception as e:
+                        logger.error(f"Identify failed: {e}")
 
+                verification_results.append({
+                    "bbox": bbox,
+                    "similarity_score": 0.0,
+                    "is_match": False
+                })
 
-
-
-                verification_results.append(
-                    {
-                        "bbox": bbox,
-                        "similarity_score": best_match_score,
-                        "is_match": best_match_status
-                    }
-                )
-
-
-
+            # ====================== ציור ======================
             annotated_frame = processed_frame.copy()
 
-
-
             for result in verification_results:
-
-
-                label = (
-                    "Known"
-                    if result["is_match"]
-                    else
-                    "Unknown"
-                )
-
-
+                label = "Known" if result["is_match"] else "Unknown"
                 self._cv_processor.draw_bounding_box(
-                    annotated_frame,
-                    result["bbox"],
-                    label,
-                    (0,255,0)
+                    annotated_frame, result["bbox"], label, (0,255,0)
                 )
-
-
 
             for mesh in face_meshes:
-
-                self._cv_processor.draw_landmarks(
-                    annotated_frame,
-                    mesh,
-                    color=(0,255,255),
-                    radius=1
-                )
-
-
+                self._cv_processor.draw_landmarks(annotated_frame, mesh, color=(0,255,255))
 
             if pose_skeleton:
+                connections = self._mediapipe.get_pose_connections()
+                self._cv_processor.draw_skeleton(annotated_frame, pose_skeleton, connections)
 
-
-                connections = (
-                    self._mediapipe
-                    .get_pose_connections()
-                )
-
-
-                self._cv_processor.draw_skeleton(
-                    annotated_frame,
-                    pose_skeleton,
-                    connections,
-                    joint_color=(0,165,255),
-                    line_color=(0,255,0),
-                    thickness=2
-                )
-
-
-
-            jpeg_bytes = (
-                self._cv_processor.to_jpeg(
-                    annotated_frame,
-                    quality=60
-                )
-            )
-
-
+            jpeg_bytes = self._cv_processor.to_jpeg(annotated_frame, quality=60)
 
             payload = {
-
                 "frame_bytes": jpeg_bytes,
-
-                "telemetry":
-                {
+                "telemetry": {
                     "faces_detected": len(faces),
-
-                    "identified":
-                        self.last_identity
+                    "identified": self.last_identity
                 }
             }
 
-
-
-            self._event_hub.publish(
-                "frame_processed",
-                payload
-            )
-
+            self._event_hub.publish("frame_processed", payload)
 
             return payload
 
-
-
         except Exception as e:
-
-            logger.error(
-                "Pipeline failure %s",
-                e,
-                exc_info=True
-            )
-
+            logger.error("Pipeline failure %s", e, exc_info=True)
             return None
 
 
