@@ -104,6 +104,7 @@ class OpenCVProcessor:
             cx = int(lm["x"] * w)
             cy = int(lm["y"] * h)
             cv2.circle(image, (cx, cy), radius, color, -1)
+
         return image
 
     def draw_skeleton(

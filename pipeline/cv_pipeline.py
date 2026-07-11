@@ -66,7 +66,7 @@ class ComputerVisionPipeline:
 
             # 3. Face Detection & 6. Embedding Generation (Combined in InsightFace)
             # In real InsightFace, detection and embedding happen in one analysis pass.
-            faces = self._insightface.extract_face_embeddings(rgb_frame)
+            faces = self._insightface.detect_faces(rgb_frame)
 
             # 4. Face Landmarks (MediaPipe Face Mesh)
             face_meshes = self._mediapipe.detect_landmarks(rgb_frame)
@@ -79,18 +79,36 @@ class ComputerVisionPipeline:
             best_match_score = 0.0
             best_match_status = False
 
-            for bbox, embedding in faces:
-                score, is_match = self._verification.verify(embedding, self._reference_embedding)
+            for face_dict in faces:  # ← שינוי חשוב
+                bbox = face_dict.get("bbox")
+                embedding = face_dict.get("embedding")
+
+                if bbox is None or embedding is None:
+                    continue
+
+                # זמנית - בלי verify
+                score = 0.85
+                is_match = False
+
                 verification_results.append({
                     "bbox": bbox,
                     "similarity_score": score,
                     "is_match": is_match
                 })
-                # Keep track of highest similarity for telemetry display
+
                 if score > best_match_score:
                     best_match_score = score
                     best_match_status = is_match
 
+                verification_results.append({
+                    "bbox": bbox,
+                    "similarity_score": score,
+                    "is_match": is_match
+                })
+
+                if score > best_match_score:
+                    best_match_score = score
+                    best_match_status = is_match
             # Draw visual guides onto BGR image frame
             annotated_frame = processed_frame.copy()
 
@@ -141,9 +159,15 @@ class ComputerVisionPipeline:
             return None
 
     def _preprocess(self, frame: np.ndarray) -> np.ndarray:
-        """
-        Executes frame scaling or adjustments.
-        """
-        # TODO: Add custom pre-processing steps (contrast adjustments, denoising, crop, etc.)
-        # as needed for vision assignments.
+        import cv2
+
+        if frame is None or frame.size == 0:
+            raise ValueError("Preprocess received an empty or invalid frame.")
+
+        frame = cv2.flip(frame, 1)
+
+        target_width, target_height = 640, 480
+        if frame.shape[1] != target_width or frame.shape[0] != target_height:
+            frame = cv2.resize(frame, (target_width, target_height), interpolation=cv2.INTER_AREA)
+
         return frame

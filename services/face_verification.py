@@ -1,62 +1,69 @@
-import logging
-import numpy as np
 from typing import Tuple
+import numpy as np
+import logging
 
-from services.similarity import SimilarityService
+from web.ApiClient import ApiClient
 
 logger = logging.getLogger(__name__)
 
 
 class FaceVerificationService:
-    """
-    Adapter providing a simple interface to verify a face embedding against a stored/reference embedding.
-    Follows SOLID principles by relying on a separate SimilarityService.
-    Does not implement any user database, identity mapping, or business logic.
-    """
 
-    def __init__(self, similarity_service: SimilarityService, threshold: float = 0.75) -> None:
-        """
-        Initializes the Verification Service.
+    def __init__(self):
+        self._api_client = ApiClient("http://localhost:8082")
 
-        Args:
-            similarity_service: Service used to compute similarity scores.
-            threshold: Numerical threshold above which embeddings are considered a match.
-        """
-        self._similarity_service = similarity_service
-        self._threshold = threshold
-        logger.info("FaceVerificationService initialized with threshold: %.2f", self._threshold)
+    async def identify(self, face_embedding: np.ndarray) -> Tuple[bool, dict | None]:
 
-    @property
-    def threshold(self) -> float:
-        return self._threshold
+        try:
+            response = await self._api_client.get(
+                "/faces/identify",
+                {
+                    "vector": face_embedding.tolist()
+                }
+            )
 
-    @threshold.setter
-    def threshold(self, value: float) -> None:
-        logger.info("Verification threshold updated from %.2f to %.2f", self._threshold, value)
-        self._threshold = value
+            logger.info(
+                "Face identified successfully: %s",
+                response.get("name")
+            )
 
-    def verify(self, face_embedding: np.ndarray, stored_embedding: np.ndarray) -> Tuple[float, bool]:
-        """
-        Verifies if two embeddings represent the same face.
+            return True, response
 
-        Args:
-            face_embedding: Current detected face embedding (NumPy array).
-            stored_embedding: Reference face embedding to compare against.
+        except Exception as e:
+            logger.debug(
+                "Face not found: %s",
+                str(e)
+            )
 
-        Returns:
-            A tuple containing:
-            - similarity_score (float): The calculated similarity score (0.0 to 1.0).
-            - match (bool): True if score >= threshold, False otherwise.
-        """
-        # 1. Calculate the similarity score
-        score = self._similarity_service.calculate_similarity(face_embedding, stored_embedding)
+            return False, None
 
-        # 2. Check match based on the threshold
-        # TODO: Implement complex business matching rules here (e.g. multi-step verification,
-        # logging mismatch anomalies, checking user blacklists, etc.).
-        is_match = score >= self._threshold
+        async def register(
+                self,
+                name: str,
+                face_embedding: np.ndarray,
+                metadata: dict | None = None
+        ):
+            try:
+                response = await self._api_client.post(
+                    "/faces",
+                    {
+                        "name": name,
+                        "faceVector": face_embedding.tolist(),
+                        "metadata": metadata
+                    }
+                )
 
-        logger.debug("Verification check: similarity=%.4f (threshold=%.2f) -> match=%s",
-                     score, self._threshold, is_match)
+                logger.info(
+                    "Face registered successfully: %s",
+                    response.get("name")
+                )
 
-        return score, is_match
+                return True, response
+
+            except Exception as e:
+                logger.debug(
+                    "Face registration failed: %s",
+                    str(e)
+                )
+
+                return False, None

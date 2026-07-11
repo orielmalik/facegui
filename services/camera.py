@@ -6,6 +6,8 @@ import cv2
 import numpy as np
 
 from core.exceptions import CameraError
+from services.cv_processor import OpenCVProcessor
+from services.insightface_service import InsightFaceService
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +88,18 @@ class CameraManager:
 
         logger.info("Camera stream closed.")
 
+        def register_callback(self, callback_func, interval_seconds: float = 0.0) -> None:
+            with self._lock:
+                self._frame_callback = callback_func
+                self._callback_interval = interval_seconds
+                self._last_callback_time = 0.0  # מאפס את הטיימר כדי שהפריים הבא יתקבל מיד
+                logger.info("New camera callback registered (interval: %s sec)", interval_seconds)
+
+        def unregister_callback(self) -> None:
+            with self._lock:
+                self._frame_callback = None
+                logger.info("Camera callback unregistered.")
+
     def read_frame(self) -> Tuple[bool, Optional[np.ndarray]]:
         """
         Reads the latest frame retrieved by the background thread.
@@ -110,6 +124,9 @@ class CameraManager:
                 consecutive_failures = 0
                 with self._lock:
                     self._latest_frame = frame
+
+
+
             else:
                 consecutive_failures += 1
                 logger.warning("Camera failed to read frame. Consecutive failures: %d", consecutive_failures)

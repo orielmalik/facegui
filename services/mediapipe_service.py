@@ -1,7 +1,8 @@
 import logging
 from typing import List, Dict, Any, Tuple, Optional
 import numpy as np
-
+import os
+os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
 # MediaPipe is listed in requirements.txt. We import it safely.
 try:
     import mediapipe as mp
@@ -58,7 +59,7 @@ class MediaPipeService(FaceLandmarkDetector, PoseDetector):
             try:
                 self._mp_pose = mp.solutions.pose.Pose(
                     min_detection_confidence=min_detection_confidence,
-                    min_tracking_confidence=min_tracking_confidence
+                    min_tracking_confidence=min_tracking_confidence,
                 )
                 logger.info("MediaPipe Pose initialized successfully.")
             except Exception as e:

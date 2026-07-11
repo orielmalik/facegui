@@ -58,16 +58,12 @@ class DependencyContainer:
         
         self.insightface_service = InsightFaceService(
             model_name=config.insightface.model_name,
-            model_dir=config.insightface.model_dir,
             ctx_id=config.insightface.ctx_id,
-            det_thresh=config.insightface.det_thresh,
             det_size=config.insightface.det_size
         )
         
         # 4. Verification and Pipeline
         self.verification_service = VisionServiceFactory.create_face_verification_service(
-            strategy_name="cosine",
-            verification_threshold=0.75
         )
         
         self.pipeline = ComputerVisionPipeline(

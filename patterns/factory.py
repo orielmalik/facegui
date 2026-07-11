@@ -51,13 +51,9 @@ class VisionServiceFactory:
         return SimilarityService(strategy=strategy)
 
     @staticmethod
-    def create_face_verification_service(strategy_name: str, verification_threshold: float = 0.75):
-        """
-        Creates FaceVerificationService instance.
-        """
-        from services.face_verification import FaceVerificationService
-        similarity_service = VisionServiceFactory.create_similarity_service(strategy_name)
-        return FaceVerificationService(
-            similarity_service=similarity_service,
-            threshold=verification_threshold
-        )
+    def create_face_verification_service():
+
+            from services.face_verification import FaceVerificationService
+
+            return FaceVerificationService(
+            )
