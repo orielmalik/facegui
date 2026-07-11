@@ -54,6 +54,5 @@ class VisionServiceFactory:
     def create_face_verification_service():
 
             from services.face_verification import FaceVerificationService
-
             return FaceVerificationService(
             )

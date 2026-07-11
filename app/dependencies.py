@@ -1,6 +1,7 @@
 import logging
 from typing import Optional
 
+from Utilss.Consts import Base_Url
 from config.config import AppConfig
 from patterns.observer import EventHub
 from patterns.factory import VisionServiceFactory
@@ -10,6 +11,7 @@ from services.mediapipe_service import MediaPipeService
 from services.insightface_service import InsightFaceService
 from services.face_verification import FaceVerificationService
 from pipeline.cv_pipeline import ComputerVisionPipeline
+from web.ApiClient import ApiClient
 from web.websocket_manager import WebSocketManager
 
 logger = logging.getLogger(__name__)
@@ -31,6 +33,7 @@ class DependencyContainer:
         self.verification_service: Optional[FaceVerificationService] = None
         self.pipeline: Optional[ComputerVisionPipeline] = None
         self.websocket_manager: Optional[WebSocketManager] = None
+        self.api_client = None
 
     def initialize(self, config: AppConfig) -> None:
         """Instantiates all platform services based on settings."""
@@ -40,7 +43,7 @@ class DependencyContainer:
         self.event_hub = EventHub()
         self.websocket_manager = WebSocketManager()
         self.cv_processor = OpenCVProcessor()
-        
+
         # 2. Camera Manager
         self.camera_manager = CameraManager(
             source=config.camera.source,
@@ -61,10 +64,13 @@ class DependencyContainer:
             ctx_id=config.insightface.ctx_id,
             det_size=config.insightface.det_size
         )
-        
-        # 4. Verification and Pipeline
-        self.verification_service = VisionServiceFactory.create_face_verification_service(
+        self.api_client = ApiClient(Base_Url)
+
+        # Business Logic
+        self.verification_service = FaceVerificationService(
+            self.api_client
         )
+
         
         self.pipeline = ComputerVisionPipeline(
             camera_manager=self.camera_manager,
