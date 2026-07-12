@@ -9,13 +9,11 @@ class FaceVerificationService:
     def __init__(self, api_client):
         self._api_client = api_client
         self._last_identify_time = 0
-        self._identify_interval = 30  # שניות
+        self._identify_interval = 30
 
     def identify(self, face_embedding: np.ndarray):
-        """זיהוי - רק פעם אחת כל 30 שניות"""
         current_time = time.time()
 
-        # בדיקה אם עברו 30 שניות
         if current_time - self._last_identify_time < self._identify_interval:
             return False, None
 
@@ -24,7 +22,7 @@ class FaceVerificationService:
         try:
 
             response = self._api_client.post(
-                "/faces/identify",
+                "api/search/identify",
                 data={"vector": face_embedding.tolist()}
             )
             return True, response

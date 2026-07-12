@@ -128,7 +128,11 @@ class ComputerVisionPipeline:
                         success, identity = self._verification.identify(embedding)
                         if success and identity:
                             self.last_identity = identity
-                            self._event_hub.publish("identify_result", identity)
+                            self._event_hub.publish("person_identified", {
+                                "name": identity.get("name", "Unknown"),
+                                "similarity": identity.get("similarityScore", 0.0)
+                            })
+
                     except Exception as e:
                         logger.error(f"Identify failed: {e}")
 

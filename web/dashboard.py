@@ -26,8 +26,17 @@ def build_modern_dashboard(deps):
 
     status_face = ui.label("No Face").classes("text-lg font-medium")
     status_system = ui.label("Camera stopped").classes("text-lg font-medium")
+    identified_name = ui.label("Unknown").classes("text-2xl font-bold text-green-400 mt-4")
 
-    # ====================== לולאה ראשית ======================
+    similarity_score = ui.label("Similarity: 0.00").classes("text-lg text-slate-300")
+    deps.event_hub.subscribe("person_identified", lambda data:
+    identified_name.set_text(f"✅ {data.get('name', 'Unknown')}")
+                             )
+
+    deps.event_hub.subscribe("person_identified", lambda data:
+    similarity_score.set_text(f"Similarity: {data.get('similarity', 0.0):.3f}")
+                             )
+    # ====================== לולאה ======================
     async def update_frame_loop():
         nonlocal enroll_mode
 
@@ -40,12 +49,10 @@ def build_modern_dashboard(deps):
             rgb = deps.cv_processor.bgr_to_rgb(frame)
             annotated = frame.copy()
 
-            # InsightFace
             faces = deps.insightface_service.detect_faces(rgb)
 
             if faces:
                 status_face.set_text(f"Face detected ({len(faces)})")
-                status_face.classes("text-green-400")
 
                 for face in faces:
                     bbox = face["bbox"]
@@ -57,18 +64,13 @@ def build_modern_dashboard(deps):
                     if enroll_mode and name_input.value.strip():
                         name = name_input.value.strip()
                         success, _ = deps.verification_service.register(name, embedding)
-
                         if success:
-                            ui.notify(f"✅ {name} registered successfully!", type="positive")
-                        else:
-                            ui.notify("Registration failed", type="negative")
-
+                            ui.notify(f"✅ Registered: {name}", type="positive")
                         enroll_mode = False
                         name_input.value = ""
 
             else:
                 status_face.set_text("No Face")
-                status_face.classes("text-red-400")
 
             # MediaPipe Landmarks + Pose
             landmarks = deps.mediapipe_service.detect_landmarks(rgb)
@@ -86,7 +88,7 @@ def build_modern_dashboard(deps):
             b64 = base64.b64encode(jpeg).decode("utf-8")
             video.set_source(f"data:image/jpeg;base64,{b64}")
 
-            await asyncio.sleep(0.033)  # ~30 FPS
+            await asyncio.sleep(0.033)
 
     # ====================== כפתורים ======================
     async def start_camera():
