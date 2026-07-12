@@ -35,6 +35,7 @@ def build_modern_dashboard(deps):
     # ====================== לולאה ======================
     async def update_frame_loop():
         nonlocal enroll_mode
+        frame_counter = 0
 
         while True:
             success, frame = deps.camera_manager.read_frame()
@@ -42,51 +43,48 @@ def build_modern_dashboard(deps):
                 await asyncio.sleep(0.05)
                 continue
 
+            frame_counter += 1
+            do_ai = (frame_counter % 4 == 0)  # AI רק כל 4 פריימים (~7-8 FPS)
+
             rgb = deps.cv_processor.bgr_to_rgb(frame)
             annotated = frame.copy()
 
-            faces = deps.insightface_service.detect_faces(rgb)
+            if do_ai:
+                faces = deps.insightface_service.detect_faces(rgb)
+            else:
+                faces = []
 
             if faces:
                 status_face.set_text(f"Face detected ({len(faces)})")
-                status_face.classes("text-green-400")
-
                 for face in faces:
                     bbox = face["bbox"]
                     embedding = face["embedding"]
 
-                    deps.cv_processor.draw_bounding_box(annotated, bbox, "Face", (0,255,0))
+                    deps.cv_processor.draw_bounding_box(annotated, bbox, "Face", (0, 255, 0))
 
-                    # ENROLLMENT
                     if enroll_mode and name_input.value.strip():
                         name = name_input.value.strip()
                         success, _ = deps.verification_service.register(name, embedding)
                         if success:
-                            ui.notify(f"✅ Registered: {name}", type="positive")
-                            identified_name.set_text(f"✅ {name}")
+                            ui.notify(f"Registered: {name}", type="positive")
                         enroll_mode = False
-                        name_input.value = ""   # ← מתנקה אוטומטית
+                        name_input.value = ""
 
-            else:
-                status_face.set_text("No Face")
-                status_face.classes("text-red-400")
+            # MediaPipe - רק כשצריך
+            if do_ai:
+                landmarks = deps.mediapipe_service.detect_landmarks(rgb)
+                for lm in landmarks:
+                    deps.cv_processor.draw_landmarks(annotated, lm)
 
-            # MediaPipe + Pose
-            landmarks = deps.mediapipe_service.detect_landmarks(rgb)
-            for lm in landmarks:
-                deps.cv_processor.draw_landmarks(annotated, lm)
+                pose = deps.mediapipe_service.detect_pose(rgb)
+                if pose:
+                    deps.cv_processor.draw_skeleton(annotated, pose, deps.mediapipe_service.get_pose_connections())
 
-            pose = deps.mediapipe_service.detect_pose(rgb)
-            if pose:
-                deps.cv_processor.draw_skeleton(annotated, pose, deps.mediapipe_service.get_pose_connections())
-
-            # Update UI
-            jpeg = deps.cv_processor.to_jpeg(annotated, quality=70)
+            jpeg = deps.cv_processor.to_jpeg(annotated, quality=60)
             b64 = base64.b64encode(jpeg).decode("utf-8")
             video.set_source(f"data:image/jpeg;base64,{b64}")
 
-            await asyncio.sleep(0.033)
-
+            await asyncio.sleep(0.04)  # 25 FPS max - פחות עומס
     # ====================== כפתורים ======================
     async def start_camera():
         nonlocal processing_task
