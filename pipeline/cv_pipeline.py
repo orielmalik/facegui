@@ -128,6 +128,9 @@ class ComputerVisionPipeline:
                         success, identity = self._verification.identify(embedding)
                         if success and identity:
                             self.last_identity = identity
+                            logger.info(f"IDENTIFIED: {identity}")
+
+                            # שלח event
                             self._event_hub.publish("person_identified", {
                                 "name": identity.get("name", "Unknown"),
                                 "similarity": identity.get("similarityScore", 0.0)
